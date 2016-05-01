@@ -5,7 +5,7 @@ unit BackupSet;
 interface
 
 uses
-  Classes, SysUtils, DOM;
+  Classes, SysUtils, laz2_DOM;
 
 type
 
@@ -28,8 +28,9 @@ type
 
     procedure ReadRulesFromDOMNode(Node: TDOMNode; var Rules: TStringList);
     procedure ReadRulesFromStream(Stream: TStream; var Rules: TStringList);
-    procedure WriteRulesToDOMNode(Node: TDOMNode; Rules: TStrings);
-    procedure WriteRulesToStream(Stream: TStream);
+    procedure WriteRulesToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode;
+      Rules: TStrings);
+    procedure WriteRulesToStream(Stream: TStream; Rules: TStrings);
   public
     constructor Create; reintroduce;
     destructor Destroy; override;
@@ -54,7 +55,7 @@ type
       write SetInclusionRule;
     procedure ReadFromDOMNode(Node: TDOMNode);
     procedure ReadFromStream(Stream: TStream);
-    procedure SaveToDOMNode(Node: TDOMNode);
+    procedure SaveToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
     procedure SaveToStream(Stream: TStream);
     property SourcePath: String read FSourcePath write FSourcePath;
   end;
@@ -144,14 +145,38 @@ begin
   end;
 end;
 
-procedure TBackupSet.WriteRulesToDOMNode(Node: TDOMNode; Rules: TStrings);
+procedure TBackupSet.WriteRulesToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode;
+  Rules: TStrings);
+var
+  RuleLoop: Integer;
+  NewNode, TextNode: TDOMNode;
 begin
+  for RuleLoop := 0 to Rules.Count-1 do
+  begin
+    NewNode := XMLDoc.CreateElement('Rule');
+    TextNode := XMLDoc.CreateTextNode(Rules[RuleLoop]);
 
+    NewNode.AppendChild(TextNode);
+    Node.AppendChild(NewNode);
+  end;
 end;
 
-procedure TBackupSet.WriteRulesToStream(Stream: TStream);
+procedure TBackupSet.WriteRulesToStream(Stream: TStream; Rules: TStrings);
+var
+  RuleLoop: Integer;
+  RuleCount, RuleLen: Word;
 begin
+  if Rules.Count > High(RuleCount) then
+    raise Exception.CreateFmt('Rule count out of range', [Rules.Count]);
 
+  RuleCount := Rules.Count;
+  Stream.WriteBuffer(RuleCount, SizeOf(RuleCount));
+  for RuleLoop := 0 to RuleCount-1 do
+  begin
+    RuleLen := Length(Rules[RuleLoop]);
+    Stream.WriteBuffer(RuleLen, SizeOf(RuleLen));
+    Stream.WriteBuffer(Rules[RuleLoop][1], RuleLen);
+  end;
 end;
 
 constructor TBackupSet.Create;
@@ -225,18 +250,58 @@ begin
 end;
 
 procedure TBackupSet.ReadFromStream(Stream: TStream);
+var
+  StringLen: Word;
 begin
+  Stream.ReadBuffer(StringLen, SizeOf(StringLen));
+  SetLength(FDestinationPath, StringLen);
+  Stream.ReadBuffer(FDestinationPath[1], StringLen);
 
+  Stream.ReadBuffer(StringLen, SizeOf(StringLen));
+  SetLength(FSourcePath, StringLen);
+  Stream.ReadBuffer(FSourcePath[1], StringLen);
+
+  ReadRulesFromStream(Stream, FExclusionRules);
+  ReadRulesFromStream(Stream, FInclusionRules);
 end;
 
-procedure TBackupSet.SaveToDOMNode(Node: TDOMNode);
+procedure TBackupSet.SaveToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
+var
+  NewNode, TextNode: TDOMNode;
 begin
+  NewNode := XMLDoc.CreateElement('DestinationPath');
+  TextNode := XMLDoc.CreateTextNode(FDestinationPath);
+  NewNode.AppendChild(TextNode);
+  Node.AppendChild(NewNode);
 
+  NewNode := XMLDoc.CreateElement('SourcePath');
+  TextNode := XMLDoc.CreateTextNode(FSourcePath);
+  NewNode.AppendChild(TextNode);
+  Node.AppendChild(NewNode);
+
+  NewNode := XMLDoc.CreateElement('ExclusionRules');
+  WriteRulesToDOMNode(XMLDoc, NewNode, FExclusionRules);
+  Node.AppendChild(NewNode);
+
+  NewNode := XMLDoc.CreateElement('InclusionRules');
+  WriteRulesToDOMNode(XMLDoc, NewNode, FInclusionRules);
+  Node.AppendChild(NewNode);
 end;
 
 procedure TBackupSet.SaveToStream(Stream: TStream);
+var
+  StringLen: Word;
 begin
+  StringLen := Length(FDestinationPath);
+  Stream.WriteBuffer(StringLen, SizeOf(StringLen));
+  Stream.WriteBuffer(FDestinationPath[1], StringLen);
 
+  StringLen := Length(FSourcePath);
+  Stream.WriteBuffer(StringLen, SizeOf(StringLen));
+  Stream.WriteBuffer(FSourcePath[1], StringLen);
+
+  WriteRulesToStream(Stream, FExclusionRules);
+  WriteRulesToStream(Stream, FInclusionRules);
 end;
 
 function TBackupSet.DeleteExclusionRule(Rule: String): Boolean;
