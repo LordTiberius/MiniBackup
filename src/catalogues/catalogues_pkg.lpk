@@ -7,10 +7,10 @@
       <Version Value="11"/>
       <SearchPaths>
         <OtherUnitFiles Value="."/>
-        <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)/"/>
+        <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
       </SearchPaths>
     </CompilerOptions>
-    <Files Count="2">
+    <Files Count="3">
       <Item1>
         <Filename Value="filecatalogue.pas"/>
         <UnitName Value="FileCatalogue"/>
@@ -19,6 +19,10 @@
         <Filename Value="backupset.pas"/>
         <UnitName Value="BackupSet"/>
       </Item2>
+      <Item3>
+        <Filename Value="backupcatalogue.pas"/>
+        <UnitName Value="backupcatalogue"/>
+      </Item3>
     </Files>
     <RequiredPkgs Count="1">
       <Item1>

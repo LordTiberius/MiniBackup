@@ -5,14 +5,16 @@ unit FileCatalogue;
 interface
 
 uses
-  Classes, SysUtils, MD5;
+  Classes, SysUtils, DCPsha512, DCPmd5;
 
 type
+  TSHA512Hash = array[0..63] of Byte;
+
   TFileVersion = record
     BackupFilename: String;
     Size, SizeCompressed: Int64;
     LastChangedTimestamp: Int64;
-    MD5, MD5Compressed: TMD5Digest;
+    SHA512, SHA512Compressed: TSHA512Hash;
     BackupSet: Word;
   end;
 
@@ -77,13 +79,13 @@ type
 
     function AddChild: TEntry;
     function AddNewVersion(BackupFilename: String; Size, CompressedSize: Int64;
-      LastChangedTimestamp: Int64; MD5, CompressedMD5: TMD5Digest;
+      LastChangedTimestamp: Int64; SHA512, CompressedSHA512: TSHA512Hash;
       BackupSet: Word): Integer;
     function AggregateFileCount: Integer;
     function AggregateFilename: String;
     function AggregateSize: Int64;
 
-    procedure SetCurrentVersionMD5(Hash: TMD5Digest);
+    procedure SetCurrentVersionSHA512(Hash: TSHA512Hash);
 
     procedure SaveToStream(Stream: TStream);
     procedure LoadFromStream(Stream: TStream);
@@ -298,9 +300,9 @@ begin
     Stream.WriteBuffer(FVersions[Loop].Size, SizeOf(FVersions[Loop].Size));
     Stream.WriteBuffer(FVersions[Loop].SizeCompressed, SizeOf(FVersions[Loop].
       SizeCompressed));
-    Stream.WriteBuffer(FVersions[Loop].MD5, SizeOf(FVersions[Loop].MD5));
-    Stream.WriteBuffer(FVersions[Loop].MD5Compressed, SizeOf(FVersions[Loop].
-      MD5Compressed));
+    Stream.WriteBuffer(FVersions[Loop].SHA512, SizeOf(FVersions[Loop].SHA512));
+    Stream.WriteBuffer(FVersions[Loop].SHA512Compressed, SizeOf(FVersions[Loop].
+      SHA512Compressed));
     Stream.WriteBuffer(FVersions[Loop].LastChangedTimestamp,
       SizeOf(FVersions[Loop].LastChangedTimestamp));
     Stream.WriteBuffer(FVersions[Loop].BackupSet, SizeOf(FVersions[Loop].
@@ -323,9 +325,9 @@ begin
     Stream.ReadBuffer(FVersions[Loop].Size, SizeOf(FVersions[Loop].Size));
     Stream.ReadBuffer(FVersions[Loop].SizeCompressed, SizeOf(FVersions[Loop].
       SizeCompressed));
-    Stream.ReadBuffer(FVersions[Loop].MD5, SizeOf(FVersions[Loop].MD5));
-    Stream.ReadBuffer(FVersions[Loop].MD5Compressed, SizeOf(FVersions[Loop].
-      MD5Compressed));
+    Stream.ReadBuffer(FVersions[Loop].SHA512, SizeOf(FVersions[Loop].SHA512));
+    Stream.ReadBuffer(FVersions[Loop].SHA512Compressed, SizeOf(FVersions[Loop].
+      SHA512Compressed));
     Stream.ReadBuffer(FVersions[Loop].LastChangedTimestamp,
       SizeOf(FVersions[Loop].LastChangedTimestamp));
     Stream.ReadBuffer(FVersions[Loop].BackupSet, SizeOf(FVersions[Loop].
@@ -353,8 +355,8 @@ begin
 end;
 
 function TEntry.AddNewVersion(BackupFilename: String; Size,
-  CompressedSize: Int64; LastChangedTimestamp: Int64; MD5,
-  CompressedMD5: TMD5Digest; BackupSet: Word): Integer;
+  CompressedSize: Int64; LastChangedTimestamp: Int64; SHA512,
+  CompressedSHA512: TSHA512Hash; BackupSet: Word): Integer;
 var
   Index: Integer;
 begin
@@ -364,8 +366,8 @@ begin
   FVersions[Index].Size := Size;
   FVersions[Index].SizeCompressed := CompressedSize;
   FVersions[Index].LastChangedTimestamp := LastChangedTimestamp;
-  FVersions[Index].MD5 := MD5;
-  FVersions[Index].MD5Compressed := CompressedMD5;
+  FVersions[Index].SHA512 := SHA512;
+  FVersions[Index].SHA512Compressed := CompressedSHA512;
   FVersions[Index].BackupSet := BackupSet;
   Result := Index;
 end;
@@ -397,9 +399,9 @@ begin
   end;
 end;
 
-procedure TEntry.SetCurrentVersionMD5(Hash: TMD5Digest);
+procedure TEntry.SetCurrentVersionSHA512(Hash: TSHA512Hash);
 begin
-  FVersions[High(FVersions)].MD5 := Hash;
+  FVersions[High(FVersions)].SHA512 := Hash;
 end;
 
 procedure TEntry.SaveToStream(Stream: TStream);

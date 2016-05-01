@@ -7,7 +7,7 @@ unit catalogues_pkg;
 interface
 
 uses
-  FileCatalogue, BackupSet;
+  FileCatalogue, BackupSet, BackupCatalogue;
 
 implementation
 
