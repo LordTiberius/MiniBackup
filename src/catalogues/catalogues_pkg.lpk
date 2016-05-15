@@ -21,7 +21,7 @@
       </Item2>
       <Item3>
         <Filename Value="backupcatalogue.pas"/>
-        <UnitName Value="backupcatalogue"/>
+        <UnitName Value="BackupCatalogue"/>
       </Item3>
     </Files>
     <RequiredPkgs Count="1">

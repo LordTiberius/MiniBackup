@@ -5,7 +5,7 @@ unit FileCatalogue;
 interface
 
 uses
-  Classes, SysUtils, DCPsha512, DCPmd5;
+  Classes, SysUtils, laz2_DOM;
 
 type
   TSHA512Hash = array[0..63] of Byte;
@@ -34,7 +34,9 @@ type
     constructor Create(AParent: TEntry); reintroduce;
     destructor Destroy; override;
 
+    procedure SaveToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
     procedure SaveToStream(Stream: TStream);
+    procedure LoadFromDOMNode(Node: TDOMNode);
     procedure LoadFromStream(Stream: TStream);
 
     function Add: TEntry;
@@ -59,14 +61,23 @@ type
     procedure SetIsDirectory(AValue: Boolean);
     procedure SetName(AValue: String);
 
-    procedure SaveName(Stream: TStream);
-    procedure LoadName(Stream: TStream);
+    procedure SaveNameToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
+    procedure SaveNameToStream(Stream: TStream);
+    procedure LoadNameFromDOMNode(Node: TDOMNode);
+    procedure LoadNameFromStream(Stream: TStream);
 
-    procedure SaveFlags(Stream: TStream);
-    procedure LoadFlags(Stream: TStream);
+    procedure SaveFlagsToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
+    procedure SaveFlagsToStream(Stream: TStream);
+    procedure LoadFlagsFromDOMNode(Node: TDOMNode);
+    procedure LoadFlagsFromStream(Stream: TStream);
 
-    procedure SaveVersions(Stream: TStream);
-    procedure LoadVersions(Stream: TStream);
+    procedure SaveVersionsToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
+    procedure SaveVersionsToStream(Stream: TStream);
+      procedure SaveVersionToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode;
+        FileVersion: TFileVersion);
+    procedure LoadVersionsFromDOMNode(Node: TDOMNode);
+      function LoadVersionFromDOMNode(Node: TDOMNode): TFileVersion;
+    procedure LoadVersionsFromStream(Stream: TStream);
   protected
     FEntries: TEntries;
     FName: String;
@@ -87,7 +98,9 @@ type
 
     procedure SetCurrentVersionSHA512(Hash: TSHA512Hash);
 
+    procedure SaveToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
     procedure SaveToStream(Stream: TStream);
+    procedure LoadFromDOMNode(Node: TDOMNode);
     procedure LoadFromStream(Stream: TStream);
 
     property Childs: TEntries read GetEntries;
@@ -139,6 +152,17 @@ begin
   inherited Destroy;
 end;
 
+procedure TEntries.SaveToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
+var
+  Loop: Integer;
+  NewNode: TDOMNode;
+begin
+  NewNode := XMLDoc.CreateElement('Entries');
+  Node.AppendChild(NewNode);
+  for Loop := 0 to FItems.Count-1 do
+    TEntry(FItems[Loop]).SaveToDOMNode(XMLDoc, NewNode);
+end;
+
 procedure TEntries.SaveToStream(Stream: TStream);
 var
   ICount: Word;
@@ -151,6 +175,25 @@ begin
   Stream.WriteBuffer(ICount, SizeOf(ICount));
   for Loop := 0 to FItems.Count-1 do
     TEntry(FItems[Loop]).SaveToStream(Stream);
+end;
+
+procedure TEntries.LoadFromDOMNode(Node: TDOMNode);
+var
+  NewEntry: TEntry;
+  Loop: Integer;
+  ParentNode: TDOMNode;
+begin
+  if TDOMElement(Node).GetElementsByTagName('Entries').Count > 0 then
+  begin
+    ParentNode := TDOMElement(Node).GetElementsByTagName('Entries')[0];
+
+    for Loop := 0 to ParentNode.ChildNodes.Count-1 do
+    begin
+      NewEntry := TEntry.Create(FParent);
+      FItems.Add(NewEntry);
+      NewEntry.LoadFromDOMNode(ParentNode.ChildNodes[Loop]);
+    end;
+  end;
 end;
 
 procedure TEntries.LoadFromStream(Stream: TStream);
@@ -257,7 +300,18 @@ begin
   FName := AValue;
 end;
 
-procedure TEntry.SaveName(Stream: TStream);
+procedure TEntry.SaveNameToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
+var
+  NewNode, TextNode: TDOMNode;
+begin
+  NewNode := XMLDoc.CreateElement('Name');
+  Node.AppendChild(NewNode);
+
+  TextNode := XMLDoc.CreateTextNode(FName);
+  NewNode.AppendChild(TextNode);
+end;
+
+procedure TEntry.SaveNameToStream(Stream: TStream);
 var
   Len: Word;
 begin
@@ -266,7 +320,13 @@ begin
   Stream.WriteBuffer(FName[1], Len);
 end;
 
-procedure TEntry.LoadName(Stream: TStream);
+procedure TEntry.LoadNameFromDOMNode(Node: TDOMNode);
+begin
+  if TDOMElement(Node).GetElementsByTagName('Name').Count > 0 then
+    FName := TDOMElement(Node).GetElementsByTagName('Name')[0].NodeValue;
+end;
+
+procedure TEntry.LoadNameFromStream(Stream: TStream);
 var
   Len: Word;
 begin
@@ -275,17 +335,59 @@ begin
   Stream.ReadBuffer(FName[1], Len);
 end;
 
-procedure TEntry.SaveFlags(Stream: TStream);
+procedure TEntry.SaveFlagsToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
+var
+  FlagsNode, NewNode, TextNode: TDOMNode;
+begin
+  FlagsNode := XMLDoc.CreateElement('Flags');
+  Node.AppendChild(FlagsNode);
+
+  NewNode := XMLDoc.CreateElement('isDirectory');
+  TextNode := XMLDoc.CreateTextNode(BoolToStr(FisDirectory, True));
+
+  NewNode.AppendChild(TextNode);
+  FlagsNode.AppendChild(NewNode);
+end;
+
+procedure TEntry.SaveFlagsToStream(Stream: TStream);
 begin
   Stream.WriteBuffer(FisDirectory, SizeOf(FisDirectory));
 end;
 
-procedure TEntry.LoadFlags(Stream: TStream);
+procedure TEntry.LoadFlagsFromDOMNode(Node: TDOMNode);
+var
+  ParentNode: TDOMNode;
+begin
+  if TDOMElement(Node).GetElementsByTagName('Flags').Count > 0 then
+  begin
+    ParentNode := TDOMElement(Node).GetElementsByTagName('Flags')[0];
+
+    if TDOMElement(ParentNode).GetElementsByTagName('isDirectory').Count > 0 then
+    begin
+      FisDirectory := StrToBool(TDOMElement(ParentNode).GetElementsByTagName(
+        'isDirectory')[0].NodeValue);
+    end;
+  end;
+end;
+
+procedure TEntry.LoadFlagsFromStream(Stream: TStream);
 begin
   Stream.ReadBuffer(FisDirectory, SizeOf(FisDirectory));
 end;
 
-procedure TEntry.SaveVersions(Stream: TStream);
+procedure TEntry.SaveVersionsToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
+var
+  ParentNode: TDOMNode;
+  Loop: Integer;
+begin
+  ParentNode := XMLDoc.CreateElement('Versions');
+  Node.AppendChild(ParentNode);
+
+  for Loop := 0 to High(FVersions) do
+    SaveVersionToDOMNode(XMLDoc, ParentNode, FVersions[Loop]);
+end;
+
+procedure TEntry.SaveVersionsToStream(Stream: TStream);
 var
   Count: Word;
   Loop: Integer;
@@ -310,7 +412,107 @@ begin
   end;
 end;
 
-procedure TEntry.LoadVersions(Stream: TStream);
+procedure TEntry.SaveVersionToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode;
+  FileVersion: TFileVersion);
+var
+  ParentNode, NewNode, TextNode: TDOMNode;
+  Hex: String;
+begin
+  ParentNode := XMLDoc.CreateElement('Version');
+  Node.AppendChild(ParentNode);
+
+  NewNode := XMLDoc.CreateElement('BackupFilename');
+  TextNode := XMLDoc.CreateTextNode(FileVersion.BackupFilename);
+  NewNode.AppendChild(TextNode);
+  ParentNode.AppendChild(NewNode);
+
+  NewNode := XMLDoc.CreateElement('Size');
+  TextNode := XMLDoc.CreateTextNode(IntToStr(FileVersion.Size));
+  NewNode.AppendChild(TextNode);
+  ParentNode.AppendChild(NewNode);
+
+  NewNode := XMLDoc.CreateElement('SizeCompressed');
+  TextNode := XMLDoc.CreateTextNode(IntToStr(FileVersion.SizeCompressed));
+  NewNode.AppendChild(TextNode);
+  ParentNode.AppendChild(NewNode);
+
+  SetLength(Hex, Length(FileVersion.SHA512)*2);
+  BinToHex(@FileVersion.SHA512, @Hex[1], Length(FileVersion.SHA512));
+  NewNode := XMLDoc.CreateElement('SHA512');
+  TextNode := XMLDoc.CreateTextNode(LowerCase(Hex));
+  NewNode.AppendChild(TextNode);
+  ParentNode.AppendChild(NewNode);
+
+  SetLength(Hex, Length(FileVersion.SHA512Compressed)*2);
+  BinToHex(@FileVersion.SHA512Compressed, @Hex[1], Length(FileVersion.SHA512));
+  NewNode := XMLDoc.CreateElement('SHA512Compressed');
+  TextNode := XMLDoc.CreateTextNode(LowerCase(Hex));
+  NewNode.AppendChild(TextNode);
+  ParentNode.AppendChild(NewNode);
+
+  NewNode := XMLDoc.CreateElement('LastChangedTimestamp');
+  TextNode := XMLDoc.CreateTextNode(IntToStr(FileVersion.LastChangedTimestamp));
+  NewNode.AppendChild(TextNode);
+  ParentNode.AppendChild(NewNode);
+
+  NewNode := XMLDoc.CreateElement('BackupSet');
+  TextNode := XMLDoc.CreateTextNode(IntToStr(FileVersion.BackupSet));
+  NewNode.AppendChild(TextNode);
+  ParentNode.AppendChild(NewNode);
+end;
+
+procedure TEntry.LoadVersionsFromDOMNode(Node: TDOMNode);
+var
+  ParentNode: TDOMNode;
+  Loop: Integer;
+begin
+  if TDOMElement(Node).GetElementsByTagName('Versions').Count > 0 then
+  begin
+    ParentNode := TDOMElement(Node).GetElementsByTagName('Versions')[0];
+
+    SetLength(FVersions, ParentNode.ChildNodes.Count);
+    for Loop := 0 to High(FVersions) do
+      FVersions[Loop] := LoadVersionFromDOMNode(ParentNode.ChildNodes[Loop]);
+  end;
+end;
+
+function TEntry.LoadVersionFromDOMNode(Node: TDOMNode): TFileVersion;
+var
+  ChildNode: TDOMNode;
+  NodeLoop: Integer;
+  Hex: String;
+begin
+  for NodeLoop := 0 to Node.ChildNodes.Count-1 do
+  begin
+    ChildNode := Node.ChildNodes[NodeLoop];
+
+    case ChildNode.NodeName of
+      'BackupFilename':
+        Result.BackupFilename := ChildNode.NodeValue;
+      'Size':
+        Result.Size := StrToInt(ChildNode.NodeValue);
+      'SizeCompressed':
+        Result.SizeCompressed := StrToInt(ChildNode.NodeValue);
+      'SHA512':
+        begin
+          Hex := ChildNode.NodeValue;
+          HexToBin(@Hex[1], @Result.SHA512, Length(Result.SHA512));
+        end;
+      'SHA512Compressed':
+        begin
+          Hex := ChildNode.NodeValue;
+          HexToBin(@Hex[1], @Result.SHA512Compressed, Length(Result.
+            SHA512Compressed));
+        end;
+      'LastChangedTimestamp':
+        Result.LastChangedTimestamp := StrToInt(ChildNode.NodeValue);
+      'BackupSet':
+        Result.BackupSet := StrToInt(ChildNode.NodeValue);
+    end;
+  end;
+end;
+
+procedure TEntry.LoadVersionsFromStream(Stream: TStream);
 var
   Count: Word;
   Loop: Integer;
@@ -389,8 +591,6 @@ begin
 end;
 
 function TEntry.AggregateSize: Int64;
-var
-  Loop: Integer;
 begin
   Result := 0;
   if FisDirectory then
@@ -404,19 +604,35 @@ begin
   FVersions[High(FVersions)].SHA512 := Hash;
 end;
 
+procedure TEntry.SaveToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
+begin
+  SaveNameToDOMNode(XMLDoc, Node);
+  SaveFlagsToDOMNode(XMLDoc, Node);
+  SaveVersionsToDOMNode(XMLDoc, Node);
+  FEntries.SaveToDOMNode(XMLDoc, Node);
+end;
+
 procedure TEntry.SaveToStream(Stream: TStream);
 begin
-  SaveName(Stream);
-  SaveFlags(Stream);
-  SaveVersions(Stream);
+  SaveNameToStream(Stream);
+  SaveFlagsToStream(Stream);
+  SaveVersionsToStream(Stream);
   FEntries.SaveToStream(Stream);
+end;
+
+procedure TEntry.LoadFromDOMNode(Node: TDOMNode);
+begin
+  LoadNameFromDOMNode(Node);
+  LoadFlagsFromDOMNode(Node);
+  LoadVersionsFromDOMNode(Node);
+  FEntries.LoadFromDOMNode(Node);
 end;
 
 procedure TEntry.LoadFromStream(Stream: TStream);
 begin
-  LoadName(Stream);
-  LoadFlags(Stream);
-  LoadVersions(Stream);
+  LoadNameFromStream(Stream);
+  LoadFlagsFromStream(Stream);
+  LoadVersionsFromStream(Stream);
   FEntries.LoadFromStream(Stream);
 end;
 
