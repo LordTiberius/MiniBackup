@@ -18,6 +18,8 @@ type
     BackupSet: Word;
   end;
 
+  TEntryType = (etUnspecified, etFile, etDirectory);
+
   TEntry = class;
 
   { TEntries }
@@ -82,7 +84,7 @@ type
     FEntries: TEntries;
     FName: String;
     FParent: TEntry;
-    FisDirectory: Boolean;
+    FEntryType: TEntryType;
     FVersions: array of TFileVersion;
   public
     constructor Create(AParent: TEntry); reintroduce;
@@ -277,7 +279,7 @@ end;
 
 function TEntry.GetIsDirectory: Boolean;
 begin
-  Result := FisDirectory;
+  Result := (FEntryType = etDirectory);
 end;
 
 function TEntry.GetName: String;
@@ -292,7 +294,11 @@ end;
 
 procedure TEntry.SetIsDirectory(AValue: Boolean);
 begin
-  FisDirectory := AValue;
+  if FEntryType <> etUnspecified then
+    raise Exception.Create('Entry type was already specified');
+
+  if AValue then
+    FEntryType := etDirectory;
 end;
 
 procedure TEntry.SetName(AValue: String);
@@ -342,8 +348,8 @@ begin
   FlagsNode := XMLDoc.CreateElement('Flags');
   Node.AppendChild(FlagsNode);
 
-  NewNode := XMLDoc.CreateElement('isDirectory');
-  TextNode := XMLDoc.CreateTextNode(BoolToStr(FisDirectory, True));
+  NewNode := XMLDoc.CreateElement('entryType');
+  TextNode := XMLDoc.CreateTextNode(IntToStr(Ord(FEntryType)));
 
   NewNode.AppendChild(TextNode);
   FlagsNode.AppendChild(NewNode);
@@ -351,7 +357,7 @@ end;
 
 procedure TEntry.SaveFlagsToStream(Stream: TStream);
 begin
-  Stream.WriteBuffer(FisDirectory, SizeOf(FisDirectory));
+  Stream.WriteBuffer(FEntryType, SizeOf(TEntryType));
 end;
 
 procedure TEntry.LoadFlagsFromDOMNode(Node: TDOMNode);
@@ -364,15 +370,15 @@ begin
 
     if TDOMElement(ParentNode).GetElementsByTagName('isDirectory').Count > 0 then
     begin
-      FisDirectory := StrToBool(TDOMElement(ParentNode).GetElementsByTagName(
-        'isDirectory')[0].NodeValue);
+      FEntryType := TEntryType(StrToInt(TDOMElement(ParentNode).
+        GetElementsByTagName('entryType')[0].NodeValue));
     end;
   end;
 end;
 
 procedure TEntry.LoadFlagsFromStream(Stream: TStream);
 begin
-  Stream.ReadBuffer(FisDirectory, SizeOf(FisDirectory));
+  Stream.ReadBuffer(FEntryType, SizeOf(TEntryType));
 end;
 
 procedure TEntry.SaveVersionsToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
@@ -542,7 +548,7 @@ begin
   FParent := AParent;
   FEntries := TEntries.Create(Self);
   FName := '';
-  FisDirectory := False;
+  FEntryType := etUnspecified;
 end;
 
 destructor TEntry.Destroy;
@@ -576,10 +582,11 @@ end;
 
 function TEntry.AggregateFileCount: Integer;
 begin
-  if FisDirectory then
-    Result := FEntries.AggergateFileCount
-  else
-    Result := 1;
+  case FEntryType of
+    etDirectory: Result := FEntries.AggergateFileCount;
+    etFile: Result := 1;
+    etUnspecified: Result := 0;
+  end;
 end;
 
 function TEntry.AggregateFilename: String;
@@ -592,10 +599,10 @@ end;
 
 function TEntry.AggregateSize: Int64;
 begin
-  Result := 0;
-  if FisDirectory then
-  begin
-    Result := FEntries.AggregateSize;
+  case FEntryType of
+    etDirectory: FEntries.AggregateSize;
+    else
+      Result := 0;
   end;
 end;
 
