@@ -117,7 +117,14 @@ type
     property Versions[Index: Integer]: TFileVersion read GetFileVersionByIndex;
   end;
 
+  operator = (h1, h2 : TSHA512Hash) b : boolean;
+
 implementation
+
+operator=(h1, h2: TSHA512Hash)b: boolean;
+begin
+  Result := CompareMem(@h1, @h2, 64)
+end;
 
 { TEntries }
 
@@ -242,7 +249,8 @@ begin
     if TEntry(FItems[Loop]).isDirectory then
       Result := Result + TEntry(FItems[Loop]).AggregateSize
     else
-      Result := Result + TEntry(FItems[Loop]).CurrentVersion.Size;
+      if TEntry(FItems[Loop]).VersionCount > 0 then
+        Result := Result + TEntry(FItems[Loop]).CurrentVersion.Size;
 end;
 
 { TEntry }
@@ -606,7 +614,7 @@ end;
 function TEntry.AggregateSize: Int64;
 begin
   case FEntryType of
-    etDirectory: FEntries.AggregateSize;
+    etDirectory: Result := FEntries.AggregateSize;
     else
       Result := 0;
   end;
