@@ -98,6 +98,8 @@ type
     function AggregateFilename: String;
     function AggregateSize: Int64;
 
+    function FileExists(Filename: String): Boolean;
+
     procedure SetCurrentVersionSHA512(Hash: TSHA512Hash);
 
     procedure SaveToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
@@ -305,6 +307,8 @@ end;
 
 procedure TEntry.SetName(AValue: String);
 begin
+  if (FParent <> nil) and (FParent.FileExists(AValue)) then
+    raise Exception.Create('Filename already exists');
   FName := AValue;
 end;
 
@@ -606,6 +610,22 @@ begin
     else
       Result := 0;
   end;
+end;
+
+function TEntry.FileExists(Filename: String): Boolean;
+var
+  FileLoop: Integer;
+begin
+  if FEntryType <> etDirectory then
+    raise Exception.Create('FileExists method is only allowed for directories');
+
+  Result := False;
+  for FileLoop := 0 to FEntries.ItemCount-1 do
+    if FEntries[FileLoop].FName = Filename then
+    begin
+      Result := True;
+      Break;
+    end;
 end;
 
 procedure TEntry.SetCurrentVersionSHA512(Hash: TSHA512Hash);
