@@ -298,7 +298,9 @@ begin
     raise Exception.Create('Entry type was already specified');
 
   if AValue then
-    FEntryType := etDirectory;
+    FEntryType := etDirectory
+  else
+    FEntryType := etFile;
 end;
 
 procedure TEntry.SetName(AValue: String);
@@ -592,7 +594,7 @@ end;
 function TEntry.AggregateFilename: String;
 begin
   if FParent <> nil then
-    Result := FParent.AggregateFilename + DirectorySeparator +  FName
+    Result := IncludeTrailingPathDelimiter(FParent.AggregateFilename) + FName
   else
     Result := FName;
 end;
