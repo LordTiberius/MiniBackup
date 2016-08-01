@@ -5,7 +5,7 @@ unit filecatalogue_test;
 interface
 
 uses
-  Classes, SysUtils, TestFramework, filecatalogue, laz2_DOM, laz2_XMLWrite;
+  Classes, SysUtils, TestFramework, filecatalogue, laz2_DOM;
 
 type
 
@@ -305,7 +305,6 @@ begin
   FRootEntry.Free;
   FRootEntry := nil;
   Check(FXMLDoc.FirstChild <> nil, 'XML root node has no child after saving');
-  WriteXMLFile(FXMLDoc, '/home/tiberius/test.xml');
 end;
 
 procedure TFileCatalogueTest.LoadRootFromDOMNode;
