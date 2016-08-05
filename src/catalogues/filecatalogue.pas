@@ -18,6 +18,8 @@ type
     BackupSet: Word;
   end;
 
+  TEntryType = (etUnspecified, etFile, etDirectory);
+
   TEntry = class;
 
   { TEntries }
@@ -82,8 +84,10 @@ type
     FEntries: TEntries;
     FName: String;
     FParent: TEntry;
-    FisDirectory: Boolean;
+    FEntryType: TEntryType;
     FVersions: array of TFileVersion;
+
+    procedure RemoveChild(Child: TEntry);
   public
     constructor Create(AParent: TEntry); reintroduce;
     destructor Destroy; override;
@@ -95,6 +99,9 @@ type
     function AggregateFileCount: Integer;
     function AggregateFilename: String;
     function AggregateSize: Int64;
+
+    function FileExists(Filename: String): Boolean;
+    procedure Remove;
 
     procedure SetCurrentVersionSHA512(Hash: TSHA512Hash);
 
@@ -113,7 +120,14 @@ type
     property Versions[Index: Integer]: TFileVersion read GetFileVersionByIndex;
   end;
 
+  operator = (h1, h2 : TSHA512Hash) b : boolean;
+
 implementation
+
+operator=(h1, h2: TSHA512Hash)b: boolean;
+begin
+  Result := CompareMem(@h1, @h2, 64)
+end;
 
 { TEntries }
 
@@ -155,12 +169,17 @@ end;
 procedure TEntries.SaveToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
 var
   Loop: Integer;
-  NewNode: TDOMNode;
+  NewNode, Child: TDOMNode;
 begin
   NewNode := XMLDoc.CreateElement('Entries');
   Node.AppendChild(NewNode);
   for Loop := 0 to FItems.Count-1 do
-    TEntry(FItems[Loop]).SaveToDOMNode(XMLDoc, NewNode);
+  begin
+    Child := XMLDoc.CreateElement('Entry');
+    NewNode.AppendChild(Child);
+
+    TEntry(FItems[Loop]).SaveToDOMNode(XMLDoc, Child);
+  end;
 end;
 
 procedure TEntries.SaveToStream(Stream: TStream);
@@ -238,7 +257,8 @@ begin
     if TEntry(FItems[Loop]).isDirectory then
       Result := Result + TEntry(FItems[Loop]).AggregateSize
     else
-      Result := Result + TEntry(FItems[Loop]).CurrentVersion.Size;
+      if TEntry(FItems[Loop]).VersionCount > 0 then
+        Result := Result + TEntry(FItems[Loop]).CurrentVersion.Size;
 end;
 
 { TEntry }
@@ -277,7 +297,7 @@ end;
 
 function TEntry.GetIsDirectory: Boolean;
 begin
-  Result := FisDirectory;
+  Result := (FEntryType = etDirectory);
 end;
 
 function TEntry.GetName: String;
@@ -292,11 +312,19 @@ end;
 
 procedure TEntry.SetIsDirectory(AValue: Boolean);
 begin
-  FisDirectory := AValue;
+  if FEntryType <> etUnspecified then
+    raise Exception.Create('Entry type was already specified');
+
+  if AValue then
+    FEntryType := etDirectory
+  else
+    FEntryType := etFile;
 end;
 
 procedure TEntry.SetName(AValue: String);
 begin
+  if (FParent <> nil) and (FParent.FileExists(AValue)) then
+    raise Exception.Create('Filename already exists');
   FName := AValue;
 end;
 
@@ -323,7 +351,7 @@ end;
 procedure TEntry.LoadNameFromDOMNode(Node: TDOMNode);
 begin
   if TDOMElement(Node).GetElementsByTagName('Name').Count > 0 then
-    FName := TDOMElement(Node).GetElementsByTagName('Name')[0].NodeValue;
+    FName := TDOMElement(Node).GetElementsByTagName('Name')[0].FirstChild.NodeValue;
 end;
 
 procedure TEntry.LoadNameFromStream(Stream: TStream);
@@ -342,8 +370,8 @@ begin
   FlagsNode := XMLDoc.CreateElement('Flags');
   Node.AppendChild(FlagsNode);
 
-  NewNode := XMLDoc.CreateElement('isDirectory');
-  TextNode := XMLDoc.CreateTextNode(BoolToStr(FisDirectory, True));
+  NewNode := XMLDoc.CreateElement('entryType');
+  TextNode := XMLDoc.CreateTextNode(IntToStr(Ord(FEntryType)));
 
   NewNode.AppendChild(TextNode);
   FlagsNode.AppendChild(NewNode);
@@ -351,7 +379,7 @@ end;
 
 procedure TEntry.SaveFlagsToStream(Stream: TStream);
 begin
-  Stream.WriteBuffer(FisDirectory, SizeOf(FisDirectory));
+  Stream.WriteBuffer(FEntryType, SizeOf(TEntryType));
 end;
 
 procedure TEntry.LoadFlagsFromDOMNode(Node: TDOMNode);
@@ -362,17 +390,17 @@ begin
   begin
     ParentNode := TDOMElement(Node).GetElementsByTagName('Flags')[0];
 
-    if TDOMElement(ParentNode).GetElementsByTagName('isDirectory').Count > 0 then
+    if TDOMElement(ParentNode).GetElementsByTagName('entryType').Count > 0 then
     begin
-      FisDirectory := StrToBool(TDOMElement(ParentNode).GetElementsByTagName(
-        'isDirectory')[0].NodeValue);
+      FEntryType := TEntryType(StrToInt(TDOMElement(ParentNode).
+        GetElementsByTagName('entryType')[0].FirstChild.NodeValue));
     end;
   end;
 end;
 
 procedure TEntry.LoadFlagsFromStream(Stream: TStream);
 begin
-  Stream.ReadBuffer(FisDirectory, SizeOf(FisDirectory));
+  Stream.ReadBuffer(FEntryType, SizeOf(TEntryType));
 end;
 
 procedure TEntry.SaveVersionsToDOMNode(XMLDoc: TXMLDocument; Node: TDOMNode);
@@ -488,26 +516,26 @@ begin
 
     case ChildNode.NodeName of
       'BackupFilename':
-        Result.BackupFilename := ChildNode.NodeValue;
+        Result.BackupFilename := ChildNode.FirstChild.NodeValue;
       'Size':
-        Result.Size := StrToInt(ChildNode.NodeValue);
+        Result.Size := StrToInt(ChildNode.FirstChild.NodeValue);
       'SizeCompressed':
-        Result.SizeCompressed := StrToInt(ChildNode.NodeValue);
+        Result.SizeCompressed := StrToInt(ChildNode.FirstChild.NodeValue);
       'SHA512':
         begin
-          Hex := ChildNode.NodeValue;
+          Hex := ChildNode.FirstChild.NodeValue;
           HexToBin(@Hex[1], @Result.SHA512, Length(Result.SHA512));
         end;
       'SHA512Compressed':
         begin
-          Hex := ChildNode.NodeValue;
+          Hex := ChildNode.FirstChild.NodeValue;
           HexToBin(@Hex[1], @Result.SHA512Compressed, Length(Result.
             SHA512Compressed));
         end;
       'LastChangedTimestamp':
-        Result.LastChangedTimestamp := StrToInt(ChildNode.NodeValue);
+        Result.LastChangedTimestamp := StrToInt(ChildNode.FirstChild.NodeValue);
       'BackupSet':
-        Result.BackupSet := StrToInt(ChildNode.NodeValue);
+        Result.BackupSet := StrToInt(ChildNode.FirstChild.NodeValue);
     end;
   end;
 end;
@@ -537,12 +565,21 @@ begin
   end;
 end;
 
+procedure TEntry.RemoveChild(Child: TEntry);
+var
+  Idx: Integer;
+begin
+  Idx := FEntries.FItems.IndexOf(Child);
+  if Idx <> -1 then
+    FEntries.FItems.Remove(Child);
+end;
+
 constructor TEntry.Create(AParent: TEntry);
 begin
   FParent := AParent;
   FEntries := TEntries.Create(Self);
   FName := '';
-  FisDirectory := False;
+  FEntryType := etUnspecified;
 end;
 
 destructor TEntry.Destroy;
@@ -576,27 +613,50 @@ end;
 
 function TEntry.AggregateFileCount: Integer;
 begin
-  if FisDirectory then
-    Result := FEntries.AggergateFileCount
-  else
-    Result := 1;
+  case FEntryType of
+    etDirectory: Result := FEntries.AggergateFileCount;
+    etFile: Result := 1;
+    etUnspecified: Result := 0;
+  end;
 end;
 
 function TEntry.AggregateFilename: String;
 begin
   if FParent <> nil then
-    Result := FParent.AggregateFilename + DirectorySeparator +  FName
+    Result := IncludeTrailingPathDelimiter(FParent.AggregateFilename) + FName
   else
     Result := FName;
 end;
 
 function TEntry.AggregateSize: Int64;
 begin
-  Result := 0;
-  if FisDirectory then
-  begin
-    Result := FEntries.AggregateSize;
+  case FEntryType of
+    etDirectory: Result := FEntries.AggregateSize;
+    else
+      Result := 0;
   end;
+end;
+
+function TEntry.FileExists(Filename: String): Boolean;
+var
+  FileLoop: Integer;
+begin
+  if FEntryType <> etDirectory then
+    raise Exception.Create('FileExists method is only allowed for directories');
+
+  Result := False;
+  for FileLoop := 0 to FEntries.ItemCount-1 do
+    if FEntries[FileLoop].FName = Filename then
+    begin
+      Result := True;
+      Break;
+    end;
+end;
+
+procedure TEntry.Remove;
+begin
+  if FParent <> nil then
+    FParent.RemoveChild(Self);
 end;
 
 procedure TEntry.SetCurrentVersionSHA512(Hash: TSHA512Hash);

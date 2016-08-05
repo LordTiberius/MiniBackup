@@ -123,7 +123,7 @@ begin
     ChildNode := Node.ChildNodes.Item[ChildLoop];
     case ChildNode.NodeName of
       'Rule':
-        Rules.Add(ChildNode.NodeValue);
+        Rules.Add(ChildNode.FirstChild.NodeValue);
     end;
   end;
 end;
@@ -238,13 +238,15 @@ begin
     ChildNode := Node.ChildNodes.Item[ChildLoop];
     case ChildNode.NodeName of
       'DestinationPath':
-        FDestinationPath := ChildNode.NodeValue;
+        if ChildNode.FirstChild <> nil then
+          FDestinationPath := ChildNode.FirstChild.NodeValue;
       'SourcePath':
-        FSourcePath := ChildNode.NodeValue;
+        if ChildNode.FirstChild <> nil then
+          FSourcePath := ChildNode.FirstChild.NodeValue;
       'ExclusionRules':
-        ReadRulesFromDOMNode(Node, FExclusionRules);
+        ReadRulesFromDOMNode(ChildNode, FExclusionRules);
       'InclusionRules':
-        ReadRulesFromDOMNode(Node, FInclusionRules);
+        ReadRulesFromDOMNode(ChildNode, FInclusionRules);
     end;
   end;
 end;

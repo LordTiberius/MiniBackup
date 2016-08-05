@@ -13,7 +13,10 @@ type
 
   TBackupCatalogue = class
   private
+    function GetBackupSet(Index: Integer): TBackupSet;
     function GetBackupSetCount: Integer;
+    procedure CheckBackupSetBounds(Index: Integer);
+    procedure SetBackupSet(Index: Integer; AValue: TBackupSet);
   protected
     FName: String;
     FBackupSets: TFPList;
@@ -36,6 +39,8 @@ type
     procedure LoadFromFile(Filename: String);
     procedure SaveToFile(Filename: String);
 
+    property BackupSets[Index: Integer]: TBackupSet read GetBackupSet
+      write SetBackupSet;
     property BackupSetCount: Integer read GetBackupSetCount;
     property Name: String read FName write FName;
   end;
@@ -44,9 +49,30 @@ implementation
 
 { TBackupCatalogue }
 
+function TBackupCatalogue.GetBackupSet(Index: Integer): TBackupSet;
+begin
+  CheckBackupSetBounds(Index);
+
+  Result := TBackupSet(FBackupSets.Items[Index]);
+end;
+
 function TBackupCatalogue.GetBackupSetCount: Integer;
 begin
   Result := FBackupSets.Count;
+end;
+
+procedure TBackupCatalogue.CheckBackupSetBounds(Index: Integer);
+begin
+  if (Index < 0)
+    or (Index >= FBackupSets.Count) then
+      raise Exception.Create('Invalid backup set index');
+end;
+
+procedure TBackupCatalogue.SetBackupSet(Index: Integer; AValue: TBackupSet);
+begin
+  CheckBackupSetBounds(Index);
+
+  FBackupSets.Items[Index] := AValue;
 end;
 
 procedure TBackupCatalogue.LoadBackupCatalogueFromStream(Filename: String);
@@ -129,7 +155,7 @@ begin
     RootNode.AppendChild(BackupSetNode);
   end;
 
-  XMLDoc.AppendChild(XMLDoc);
+  XMLDoc.AppendChild(RootNode);
   WriteXMLFile(XMLDoc, Filename);
   XMLDoc.Free;
 end;
@@ -138,7 +164,7 @@ procedure TBackupCatalogue.LoadNameFromDOMNode(Node: TDOMNode);
 begin
   if TDOMElement(Node).GetElementsByTagName('CatalogueName').Count > 0 then
     FName := TDOMElement(Node).GetElementsByTagName('CatalogueName')[0].
-      NodeValue;
+      FirstChild.NodeValue;
 end;
 
 procedure TBackupCatalogue.LoadNameFromStream(Stream: TStream);
@@ -199,6 +225,9 @@ begin
   case LowerCase(ExtractFileExt(Filename)) of
     '.xml': LoadBackupCatalogueFromXMLDocument(Filename);
     '.buc': LoadBackupCatalogueFromStream(Filename);
+    else
+      raise Exception.CreateFmt('Unknown file extension "%s"',
+        [ExtractFileExt(Filename)]);
   end;
 end;
 
@@ -207,6 +236,9 @@ begin
   case LowerCase(ExtractFileExt(Filename)) of
     '.xml': SaveBackupCatalogueToXMLDocument(Filename);
     '.buc': SaveBackupCatalogueToStream(Filename);
+    else
+      raise Exception.CreateFmt('Unknown file extension "%s"',
+        [ExtractFileExt(Filename)]);
   end;
 end;
 

@@ -2,7 +2,6 @@
 <CONFIG>
   <Package Version="4">
     <Name Value="catalogues_pkg"/>
-    <AutoUpdate Value="OnRebuildingAll"/>
     <CompilerOptions>
       <Version Value="11"/>
       <SearchPaths>
