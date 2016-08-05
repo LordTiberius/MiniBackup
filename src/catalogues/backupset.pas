@@ -238,9 +238,11 @@ begin
     ChildNode := Node.ChildNodes.Item[ChildLoop];
     case ChildNode.NodeName of
       'DestinationPath':
-        FDestinationPath := ChildNode.FirstChild.NodeValue;
+        if ChildNode.FirstChild <> nil then
+          FDestinationPath := ChildNode.FirstChild.NodeValue;
       'SourcePath':
-        FSourcePath := ChildNode.FirstChild.NodeValue;
+        if ChildNode.FirstChild <> nil then
+          FSourcePath := ChildNode.FirstChild.NodeValue;
       'ExclusionRules':
         ReadRulesFromDOMNode(ChildNode, FExclusionRules);
       'InclusionRules':
